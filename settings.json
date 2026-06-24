@@ -22,6 +22,22 @@
       "Bash(git branch *)",
       "Bash(cat .claude/jira-context.md)",
       "Bash(ls *)"
+    ],
+     "deny": [
+      "Bash(*bitbucket* delete*)",
+      "Bash(*bitbucket* remove*)",
+      "Bash(*bitbucket* destroy*)",
+      "Bash(*bitbucket* drop*)",
+      "Bash(*bitbucket* --force*)",
+      "Bash(*bitbucket* force-delete*)",
+      "Bash(*bitbucket* force-push*)",
+      "Bash(*bitbucket* repo delete*)",
+      "Bash(*bitbucket* branch delete*)",
+      "Bash(*bitbucket* -D *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git branch -D *)",
+      "Bash(git branch --delete *)"
     ]
   }
 }
