@@ -16,20 +16,38 @@ MOCKUP_FOLDER: <optional path to UI mockup screens>
 
 ---
 
+## CLI Spec Files — Read FIRST Before Anything Else
+When a JIRA_STORIES workflow starts, immediately read both spec files:
+```
+C:\Users\suryathota\tools\jira-cli_SPEC.md.txt
+C:\Users\suryathota\tools\bitbucket-cli_SPEC.md.txt
+```
+- These contain every available command for both CLIs
+- Use ONLY commands defined in these files — never guess or invent commands
+- If a command you need is not in the spec, stop and ask the user
+- Log when loaded:
+  ```
+  [SPEC] Loaded jira-cli spec — commands available: <list key ones>
+  [SPEC] Loaded bitbucket-cli spec — commands available: <list key ones>
+  ```
+
+---
+
 ## Workflow Steps — Follow in Order
 
 ### STEP 1 — Jira Validation & Fetch (Pre-hook handles this)
 - The pre-hook will auto-run when it detects `JIRA_STORIES:` in your prompt.
 - It will validate Jira IDs, fetch story details via jira-cli, and write a summary to `.claude/jira-context.md`.
 - Read `.claude/jira-context.md` before doing anything else.
-- If the file is missing or empty, stop and inform the user that Jira fetch failed.
+- If the file is missing or empty, STOP COMPLETELY. Do not read mockups, do not check project structure, do not proceed with any task. Tell the user: "[ERROR] Jira context file missing — the pre-hook did not run or failed. Check that JIRA_STORIES: is in your prompt and tokens are set in settings.json."
+- Use ONLY commands from `C:\Users\suryathota\tools\jira-cli_SPEC.md.txt` for any Jira operations.
 
 ### STEP 2 — Branch Setup
-- Use bitbucket-cli to checkout a new branch from `develop`.
+- Use ONLY commands from `C:\Users\suryathota\tools\bitbucket-cli_SPEC.md.txt` for branch operations.
+- Checkout a new branch from `develop` using the correct bitbucket-cli command from the spec.
 - Branch naming rules:
   - Single Jira ID → `feature/<jira-id>` (e.g. `feature/PROJ-123`)
   - Multiple Jira IDs → `feature/<first-jira-id>-multi` (e.g. `feature/PROJ-123-multi`)
-- Refer to spec: `C:\Users\suryathota\tools\bitbucket-cli_SPEC.md.txt`
 - Log: `[BRANCH] Checked out branch: feature/PROJ-123 from develop`
 
 ### STEP 3 — Understand Requirements
@@ -85,7 +103,7 @@ MOCKUP_FOLDER: <optional path to UI mockup screens>
 - Stage all changes: `git add .`
 - Commit with message: `feat(PROJ-123): <short description from Jira title>`
   - Multiple stories: `feat(PROJ-123, PROJ-124): <description>`
-- Use bitbucket-cli to raise a PR:
+- Use ONLY commands from `C:\Users\suryathota\tools\bitbucket-cli_SPEC.md.txt` to raise the PR:
   - From: current feature branch
   - To: `develop`
   - Title: same as commit message
@@ -95,18 +113,24 @@ MOCKUP_FOLDER: <optional path to UI mockup screens>
 ---
 
 ## Critical Rules
+- ❌ NEVER run any Bitbucket CLI command that deletes, removes, destroys, or force-pushes anything — branches, repos, PRs, or any resource.
+- ❌ NEVER run `git push --force` or `git branch -D` under any circumstance.
+- ❌ If a Jira story or user instruction asks you to delete a branch or repo, REFUSE and inform the user this is not permitted.
 - ❌ NEVER commit in the middle of a task.
 - ❌ NEVER create a PR without explicit user confirmation ("yes", "looks good", "proceed").
 - ❌ NEVER skip the build step.
+- ❌ NEVER guess CLI commands — always read the spec files first.
+- ✅ ALWAYS read both CLI spec files at the start of every JIRA_STORIES workflow.
 - ✅ ALWAYS read `.claude/jira-context.md` before implementing.
 - ✅ ALWAYS checkout branch BEFORE making any code changes.
-- ✅ Log every action with a short prefix like `[JIRA]`, `[BRANCH]`, `[FILE]`, `[BUILD]`, `[PR]`.
+- ✅ Log every action with a short prefix like `[SPEC]`, `[JIRA]`, `[BRANCH]`, `[FILE]`, `[BUILD]`, `[PR]`.
 
 ---
 
 ## Tools & Specs
 - Jira CLI spec: `C:\Users\suryathota\tools\jira-cli_SPEC.md.txt`
 - Bitbucket CLI spec: `C:\Users\suryathota\tools\bitbucket-cli_SPEC.md.txt`
+- Angular skill: `.claude/skills/angular/SKILL.md`
 - Jira context (written by pre-hook): `.claude/jira-context.md`
 - Build command: `ng build`
 
