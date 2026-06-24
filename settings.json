@@ -1,4 +1,10 @@
 {
+  "env": {
+    "JIRA_CLI_SPEC": "C:\\Users\\suryathota\\tools\\jira-cli_SPEC.md.txt",
+    "BITBUCKET_CLI_SPEC": "C:\\Users\\suryathota\\tools\\bitbucket-cli_SPEC.md.txt",
+    "JIRA_CLI": "C:\\Users\\suryathota\\tools\\jira-cli",
+    "BITBUCKET_CLI": "C:\\Users\\suryathota\\tools\\bitbucket-cli"
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -20,10 +26,12 @@
       "Bash(git add .)",
       "Bash(git commit *)",
       "Bash(git branch *)",
-      "Bash(cat .claude/jira-context.md)",
+      "Bash(cat .claude/*)",
+      "Bash(cat C:\\Users\\suryathota\\tools\\*)",
+      "Bash(find src/app *)",
       "Bash(ls *)"
     ],
-     "deny": [
+    "deny": [
       "Bash(*bitbucket* delete*)",
       "Bash(*bitbucket* remove*)",
       "Bash(*bitbucket* destroy*)",
@@ -31,8 +39,6 @@
       "Bash(*bitbucket* --force*)",
       "Bash(*bitbucket* force-delete*)",
       "Bash(*bitbucket* force-push*)",
-      "Bash(*bitbucket* repo delete*)",
-      "Bash(*bitbucket* branch delete*)",
       "Bash(*bitbucket* -D *)",
       "Bash(git push --force*)",
       "Bash(git push -f *)",
