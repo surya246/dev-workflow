@@ -109,29 +109,178 @@
 # Pre-hook: Detects JIRA_STORIES in prompt, fetches Jira details, writes context file.
 # Claude Code injects env vars from settings.json automatically.
 
+# JIRA_CLI="C:/Users/suryathota/tools/jira-cli"
+# CONTEXT_FILE=".claude/jira-context.md"
+
+# # ── Read full stdin (Claude passes hook input as JSON) ──────────────────────
+# HOOK_INPUT=$(cat)
+
+# # ── Write raw input to a temp file so we can parse it safely ────────────────
+# TMPFILE=$(mktemp /tmp/hook-input-XXXX.json)
+# echo "$HOOK_INPUT" > "$TMPFILE"
+
+# # ── Extract prompt — handles multiline by using python-safe approach via awk ─
+# # Try to extract the full prompt text from the JSON
+# PROMPT=$(echo "$HOOK_INPUT" | tr -d '\n' | grep -o '"prompt":"[^"]*"' | sed 's/"prompt":"//;s/"$//')
+
+# # Fallback: dump entire input and search for JIRA_STORIES anywhere in it
+# if ! echo "$HOOK_INPUT" | grep -qi "JIRA_STORIES"; then
+#   rm -f "$TMPFILE"
+#   exit 0
+# fi
+
+# echo "[HOOK] JIRA_STORIES detected — starting pre-hook" >&2
+
+# # ── Validate required env vars ───────────────────────────────────────────────
+# MISSING=0
+# for VAR in JIRA_BASE_URL JIRA_API_TOKEN BITBUCKET_BASE_URL BITBUCKET_API_TOKEN BITBUCKET_PROJECT BITBUCKET_REPO; do
+#   if [ -z "${!VAR}" ]; then
+#     echo "[HOOK][ERROR] $VAR is not set in .claude/settings.json env block" >&2
+#     MISSING=1
+#   fi
+# done
+
+# if [ "$MISSING" -eq 1 ]; then
+#   echo "[HOOK][ERROR] Fill in missing values in .claude/settings.json and retry." >&2
+#   rm -f "$TMPFILE"
+#   exit 1
+# fi
+
+# echo "[HOOK] ✅ All env vars present" >&2
+
+# # ── Extract Jira IDs ─────────────────────────────────────────────────────────
+# JIRA_LINE=$(echo "$HOOK_INPUT" | tr -d '\n' | grep -oi 'JIRA_STORIES:[^"\\]*' | head -1)
+# JIRA_IDS_RAW=$(echo "$JIRA_LINE" | sed 's/JIRA_STORIES://I' | tr ',' '\n' | tr -d ' \t\r\\n' | grep -v '^$')
+
+# if [ -z "$JIRA_IDS_RAW" ]; then
+#   echo "[HOOK][ERROR] Could not extract Jira IDs. Make sure format is: JIRA_STORIES: PROJ-123, PROJ-124" >&2
+#   rm -f "$TMPFILE"
+#   exit 1
+# fi
+
+# echo "[HOOK] IDs found: $(echo $JIRA_IDS_RAW | tr '\n' ' ')" >&2
+
+# # ── Create context file ──────────────────────────────────────────────────────
+# mkdir -p .claude
+
+# {
+#   echo "# Jira Story Context"
+#   echo "_Generated: $(date)_"
+#   echo ""
+#   echo "- Jira URL: $JIRA_BASE_URL"
+#   echo "- Bitbucket Project: $BITBUCKET_PROJECT / Repo: $BITBUCKET_REPO"
+#   echo ""
+# } > "$CONTEXT_FILE"
+
+# FETCH_FAILED=0
+# FIRST_ID=""
+# JIRA_COUNT=0
+
+# while IFS= read -r JIRA_ID; do
+#   [ -z "$JIRA_ID" ] && continue
+#   [ -z "$FIRST_ID" ] && FIRST_ID="$JIRA_ID"
+#   JIRA_COUNT=$((JIRA_COUNT + 1))
+
+#   echo "[HOOK] Fetching: $JIRA_ID ..." >&2
+
+#   # ── Adjust flags below to match your jira-cli_SPEC.md.txt ──────────────
+#   JIRA_OUTPUT=$("$JIRA_CLI" issue view "$JIRA_ID" \
+#     --url "$JIRA_BASE_URL" \
+#     --token "$JIRA_API_TOKEN" 2>&1)
+#   EXIT_CODE=$?
+
+#   if [ $EXIT_CODE -ne 0 ]; then
+#     echo "[HOOK][ERROR] Failed to fetch $JIRA_ID (exit $EXIT_CODE)" >&2
+#     echo "[HOOK][ERROR] Output: $JIRA_OUTPUT" >&2
+#     FETCH_FAILED=1
+#     continue
+#   fi
+
+#   {
+#     echo "## $JIRA_ID"
+#     echo ""
+#     echo "$JIRA_OUTPUT"
+#     echo ""
+#     echo "---"
+#     echo ""
+#   } >> "$CONTEXT_FILE"
+
+#   echo "[HOOK] ✅ Fetched: $JIRA_ID" >&2
+
+# done <<< "$JIRA_IDS_RAW"
+
+# if [ "$FETCH_FAILED" -eq 1 ]; then
+#   echo "[HOOK][ERROR] One or more stories failed to fetch. Aborting." >&2
+#   rm -f "$TMPFILE"
+#   exit 1
+# fi
+
+# # ── Branch name ──────────────────────────────────────────────────────────────
+# if [ "$JIRA_COUNT" -eq 1 ]; then
+#   BRANCH_NAME="feature/${FIRST_ID}"
+# else
+#   BRANCH_NAME="feature/${FIRST_ID}-multi"
+# fi
+
+# {
+#   echo "## Branch Info"
+#   echo "- Stories: $JIRA_COUNT"
+#   echo "- Branch: \`$BRANCH_NAME\`"
+#   echo "- Base: \`develop\`"
+#   echo "- Bitbucket URL: $BITBUCKET_BASE_URL"
+#   echo ""
+# } >> "$CONTEXT_FILE"
+
+# echo "[HOOK] ✅ Context written to $CONTEXT_FILE" >&2
+# echo "[HOOK] ✅ Branch: $BRANCH_NAME" >&2
+# echo "[HOOK] ✅ Pre-hook complete — Claude will now proceed." >&2
+
+# rm -f "$TMPFILE"
+# exit 0
+
+# # ── SAFETY GUARD: Block destructive Bitbucket operations ────────────────────
+# # This function should be called before any bitbucket-cli command
+# validate_bitbucket_command() {
+#   local CMD="$1"
+#   local DESTRUCTIVE_PATTERNS="delete|remove|destroy|drop|purge|wipe|truncate|force-delete|force-push|--force|-D"
+  
+#   if echo "$CMD" | grep -qiE "$DESTRUCTIVE_PATTERNS"; then
+#     echo "[HOOK][BLOCKED] Destructive Bitbucket command detected and blocked: $CMD" >&2
+#     echo "[HOOK][BLOCKED] Claude is not allowed to delete branches, repos, or any Bitbucket resources." >&2
+#     exit 1
+#   fi
+# }
+
+
+#!/bin/bash
+# .claude/hooks/pre-prompt.sh
+# Pre-hook: Detects JIRA_STORIES in prompt, fetches Jira details, writes context file.
+# Claude Code injects env vars from settings.json automatically.
+
 JIRA_CLI="C:/Users/suryathota/tools/jira-cli"
-CONTEXT_FILE=".claude/jira-context.md"
+BITBUCKET_CLI="C:/Users/suryathota/tools/bitbucket-cli"
+
+# ── Resolve project root from THIS script's location ────────────────────────
+# Script lives at <project-root>/.claude/hooks/pre-prompt.sh
+# Two levels up = project root — always correct regardless of where claude was launched
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CONTEXT_FILE="$PROJECT_ROOT/.claude/jira-context.md"
+
+echo "[HOOK] Project root resolved: $PROJECT_ROOT" >&2
+echo "[HOOK] Context file will be written to: $CONTEXT_FILE" >&2
 
 # ── Read full stdin (Claude passes hook input as JSON) ──────────────────────
 HOOK_INPUT=$(cat)
 
-# ── Write raw input to a temp file so we can parse it safely ────────────────
-TMPFILE=$(mktemp /tmp/hook-input-XXXX.json)
-echo "$HOOK_INPUT" > "$TMPFILE"
-
-# ── Extract prompt — handles multiline by using python-safe approach via awk ─
-# Try to extract the full prompt text from the JSON
-PROMPT=$(echo "$HOOK_INPUT" | tr -d '\n' | grep -o '"prompt":"[^"]*"' | sed 's/"prompt":"//;s/"$//')
-
-# Fallback: dump entire input and search for JIRA_STORIES anywhere in it
+# ── Only activate for JIRA_STORIES prompts ──────────────────────────────────
 if ! echo "$HOOK_INPUT" | grep -qi "JIRA_STORIES"; then
-  rm -f "$TMPFILE"
   exit 0
 fi
 
 echo "[HOOK] JIRA_STORIES detected — starting pre-hook" >&2
 
-# ── Validate required env vars ───────────────────────────────────────────────
+# ── Validate required env vars (injected from settings.json) ────────────────
 MISSING=0
 for VAR in JIRA_BASE_URL JIRA_API_TOKEN BITBUCKET_BASE_URL BITBUCKET_API_TOKEN BITBUCKET_PROJECT BITBUCKET_REPO; do
   if [ -z "${!VAR}" ]; then
@@ -142,30 +291,38 @@ done
 
 if [ "$MISSING" -eq 1 ]; then
   echo "[HOOK][ERROR] Fill in missing values in .claude/settings.json and retry." >&2
-  rm -f "$TMPFILE"
   exit 1
 fi
 
 echo "[HOOK] ✅ All env vars present" >&2
 
-# ── Extract Jira IDs ─────────────────────────────────────────────────────────
-JIRA_LINE=$(echo "$HOOK_INPUT" | tr -d '\n' | grep -oi 'JIRA_STORIES:[^"\\]*' | head -1)
-JIRA_IDS_RAW=$(echo "$JIRA_LINE" | sed 's/JIRA_STORIES://I' | tr ',' '\n' | tr -d ' \t\r\\n' | grep -v '^$')
+# ── SAFETY GUARD: Block destructive Bitbucket operations ────────────────────
+validate_bitbucket_command() {
+  local CMD="$1"
+  if echo "$CMD" | grep -qiE "delete|remove|destroy|drop|purge|wipe|force-delete|force-push|--force|-D"; then
+    echo "[HOOK][BLOCKED] Destructive Bitbucket command blocked: $CMD" >&2
+    exit 1
+  fi
+}
+
+# ── Extract Jira IDs from prompt ─────────────────────────────────────────────
+JIRA_LINE=$(echo "$HOOK_INPUT" | tr -d '\n' | grep -oi 'JIRA_STORIES:[^"\\,}]*' | head -1)
+JIRA_IDS_RAW=$(echo "$JIRA_LINE" | sed 's/JIRA_STORIES://I' | tr ',' '\n' | tr -d ' \t\r' | grep -v '^$')
 
 if [ -z "$JIRA_IDS_RAW" ]; then
-  echo "[HOOK][ERROR] Could not extract Jira IDs. Make sure format is: JIRA_STORIES: PROJ-123, PROJ-124" >&2
-  rm -f "$TMPFILE"
+  echo "[HOOK][ERROR] Could not extract Jira IDs. Format: JIRA_STORIES: PROJ-123, PROJ-124" >&2
   exit 1
 fi
 
 echo "[HOOK] IDs found: $(echo $JIRA_IDS_RAW | tr '\n' ' ')" >&2
 
-# ── Create context file ──────────────────────────────────────────────────────
-mkdir -p .claude
+# ── Create context file in PROJECT ROOT .claude folder ──────────────────────
+mkdir -p "$PROJECT_ROOT/.claude"
 
 {
   echo "# Jira Story Context"
   echo "_Generated: $(date)_"
+  echo "_Project root: $PROJECT_ROOT_"
   echo ""
   echo "- Jira URL: $JIRA_BASE_URL"
   echo "- Bitbucket Project: $BITBUCKET_PROJECT / Repo: $BITBUCKET_REPO"
@@ -183,15 +340,14 @@ while IFS= read -r JIRA_ID; do
 
   echo "[HOOK] Fetching: $JIRA_ID ..." >&2
 
-  # ── Adjust flags below to match your jira-cli_SPEC.md.txt ──────────────
+  # Adjust flags below to match your jira-cli_SPEC.md.txt
   JIRA_OUTPUT=$("$JIRA_CLI" issue view "$JIRA_ID" \
     --url "$JIRA_BASE_URL" \
     --token "$JIRA_API_TOKEN" 2>&1)
   EXIT_CODE=$?
 
   if [ $EXIT_CODE -ne 0 ]; then
-    echo "[HOOK][ERROR] Failed to fetch $JIRA_ID (exit $EXIT_CODE)" >&2
-    echo "[HOOK][ERROR] Output: $JIRA_OUTPUT" >&2
+    echo "[HOOK][ERROR] Failed to fetch $JIRA_ID (exit $EXIT_CODE): $JIRA_OUTPUT" >&2
     FETCH_FAILED=1
     continue
   fi
@@ -211,7 +367,6 @@ done <<< "$JIRA_IDS_RAW"
 
 if [ "$FETCH_FAILED" -eq 1 ]; then
   echo "[HOOK][ERROR] One or more stories failed to fetch. Aborting." >&2
-  rm -f "$TMPFILE"
   exit 1
 fi
 
@@ -231,22 +386,8 @@ fi
   echo ""
 } >> "$CONTEXT_FILE"
 
-echo "[HOOK] ✅ Context written to $CONTEXT_FILE" >&2
+echo "[HOOK] ✅ Context written: $CONTEXT_FILE" >&2
 echo "[HOOK] ✅ Branch: $BRANCH_NAME" >&2
-echo "[HOOK] ✅ Pre-hook complete — Claude will now proceed." >&2
+echo "[HOOK] ✅ Pre-hook complete." >&2
 
-rm -f "$TMPFILE"
 exit 0
-
-# ── SAFETY GUARD: Block destructive Bitbucket operations ────────────────────
-# This function should be called before any bitbucket-cli command
-validate_bitbucket_command() {
-  local CMD="$1"
-  local DESTRUCTIVE_PATTERNS="delete|remove|destroy|drop|purge|wipe|truncate|force-delete|force-push|--force|-D"
-  
-  if echo "$CMD" | grep -qiE "$DESTRUCTIVE_PATTERNS"; then
-    echo "[HOOK][BLOCKED] Destructive Bitbucket command detected and blocked: $CMD" >&2
-    echo "[HOOK][BLOCKED] Claude is not allowed to delete branches, repos, or any Bitbucket resources." >&2
-    exit 1
-  fi
-}
